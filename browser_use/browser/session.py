@@ -343,6 +343,7 @@ class BrowserSession(BaseModel):
 	_screenshot_watchdog: Any | None = PrivateAttr(default=None)
 	_permissions_watchdog: Any | None = PrivateAttr(default=None)
 	_recording_watchdog: Any | None = PrivateAttr(default=None)
+	_enhanced_navigation_watchdog: Any | None = PrivateAttr(default=None)
 
 	_logger: Any = PrivateAttr(default=None)
 
@@ -982,6 +983,7 @@ class BrowserSession(BaseModel):
 		from browser_use.browser.watchdogs.screenshot_watchdog import ScreenshotWatchdog
 		from browser_use.browser.watchdogs.security_watchdog import SecurityWatchdog
 		from browser_use.browser.watchdogs.storage_state_watchdog import StorageStateWatchdog
+		from browser_use.browser.watchdogs.enhanced_navigation_watchdog import EnhancedNavigationWatchdog
 
 		# Initialize CrashWatchdog
 		# CrashWatchdog.model_rebuild()
@@ -1095,6 +1097,11 @@ class BrowserSession(BaseModel):
 		RecordingWatchdog.model_rebuild()
 		self._recording_watchdog = RecordingWatchdog(event_bus=self.event_bus, browser_session=self)
 		self._recording_watchdog.attach_to_session()
+
+		# Initialize EnhancedNavigationWatchdog (handles enhanced page loading and anti-bot detection)
+		EnhancedNavigationWatchdog.model_rebuild()
+		self._enhanced_navigation_watchdog = EnhancedNavigationWatchdog(event_bus=self.event_bus, browser_session=self)
+		# Enhanced navigation watchdog listens to NavigationStartedEvent and NavigationCompleteEvent
 
 		# Mark watchdogs as attached to prevent duplicate attachment
 		self._watchdogs_attached = True

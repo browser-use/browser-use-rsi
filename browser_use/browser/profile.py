@@ -1,3 +1,4 @@
+import random
 import sys
 import tempfile
 from collections.abc import Iterable
@@ -100,6 +101,40 @@ CHROME_DETERMINISTIC_RENDERING_ARGS = [
 	# '--disable-2d-canvas-clip-aa',
 	'--font-render-hinting=none',
 	'--force-color-profile=srgb',
+]
+
+CHROME_STEALTH_ARGS = [
+	# Enhanced anti-detection arguments for better bot evasion
+	'--disable-blink-features=AutomationControlled',
+	'--disable-dev-shm-usage',
+	'--no-first-run',
+	'--no-service-autorun',
+	'--password-store=basic',
+	'--use-mock-keychain',
+	'--disable-component-update',
+	'--disable-background-timer-throttling',
+	'--disable-backgrounding-occluded-windows',
+	'--disable-renderer-backgrounding',
+	'--disable-features=TranslateUI,BlinkGenPropertyTrees',
+	'--disable-ipc-flooding-protection',
+	'--enable-features=NetworkService,NetworkServiceInProcess',
+	'--force-color-profile=srgb',
+	'--disable-default-apps',
+	# Randomize some browser characteristics
+	'--disable-extensions-http-throttling',
+	'--aggressive-cache-discard',
+]
+
+# Pool of realistic user agents for stealth mode
+STEALTH_USER_AGENTS = [
+	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+	'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+	'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+	'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+	'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
+	'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0',
+	'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
 ]
 
 CHROME_DEFAULT_ARGS = [
@@ -555,6 +590,7 @@ class BrowserProfile(BrowserConnectArgs, BrowserLaunchPersistentContextArgs, Bro
 	# custom options we provide that aren't native playwright kwargs
 	disable_security: bool = Field(default=False, description='Disable browser security features.')
 	deterministic_rendering: bool = Field(default=False, description='Enable deterministic rendering flags.')
+	stealth_mode: bool = Field(default=True, description='Enable enhanced stealth browsing features to avoid bot detection.')
 	allowed_domains: list[str] | None = Field(
 		default=None,
 		description='List of allowed domains for navigation e.g. ["*.google.com", "https://example.com", "chrome-extension://*"]',
@@ -750,6 +786,7 @@ class BrowserProfile(BrowserConnectArgs, BrowserLaunchPersistentContextArgs, Bro
 			*(CHROME_HEADLESS_ARGS if self.headless else []),
 			*(CHROME_DISABLE_SECURITY_ARGS if self.disable_security else []),
 			*(CHROME_DETERMINISTIC_RENDERING_ARGS if self.deterministic_rendering else []),
+			*(CHROME_STEALTH_ARGS if self.stealth_mode else []),
 			*(
 				[f'--window-size={self.window_size["width"]},{self.window_size["height"]}']
 				if self.window_size
@@ -773,8 +810,13 @@ class BrowserProfile(BrowserConnectArgs, BrowserLaunchPersistentContextArgs, Bro
 				pre_conversion_args.append(f'--proxy-bypass-list={proxy_bypass}')
 
 		# User agent flag
-		if self.user_agent:
-			pre_conversion_args.append(f'--user-agent={self.user_agent}')
+		user_agent_to_use = self.user_agent
+		if self.stealth_mode and not user_agent_to_use:
+			# Use random user agent for stealth mode
+			user_agent_to_use = random.choice(STEALTH_USER_AGENTS)
+
+		if user_agent_to_use:
+			pre_conversion_args.append(f'--user-agent={user_agent_to_use}')
 
 		# Special handling for --disable-features to merge values instead of overwriting
 		# This prevents disable_security=True from breaking extensions by ensuring
