@@ -990,6 +990,7 @@ class BrowserSession(BaseModel):
 		from browser_use.browser.watchdogs.network_reliability_watchdog import NetworkReliabilityWatchdog
 		from browser_use.browser.watchdogs.form_reliability_watchdog import FormReliabilityWatchdog
 		from browser_use.browser.watchdogs.dynamic_content_watchdog import DynamicContentWatchdog
+		from browser_use.browser.watchdogs.element_staleness_watchdog import ElementStalenessWatchdog
 
 		# Initialize CrashWatchdog
 		# CrashWatchdog.model_rebuild()
@@ -1124,6 +1125,11 @@ class BrowserSession(BaseModel):
 		DynamicContentWatchdog.model_rebuild()
 		self._dynamic_content_watchdog = DynamicContentWatchdog(event_bus=self.event_bus, browser_session=self)
 		self._dynamic_content_watchdog.attach_to_session()
+
+		# Initialize ElementStalenessWatchdog (handles stale element detection and recovery)
+		ElementStalenessWatchdog.model_rebuild()
+		self._element_staleness_watchdog = ElementStalenessWatchdog(event_bus=self.event_bus, browser_session=self)
+		self._element_staleness_watchdog.attach_to_session()
 
 		# Mark watchdogs as attached to prevent duplicate attachment
 		self._watchdogs_attached = True

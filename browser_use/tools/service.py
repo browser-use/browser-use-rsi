@@ -50,6 +50,7 @@ from browser_use.tools.views import (
 	UploadFileAction,
 )
 from browser_use.utils import _log_pretty_url, time_execution_sync
+from browser_use.tools.error_classifier import error_classifier, ErrorClassificationResult
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,32 @@ def handle_browser_error(e: BrowserError) -> ActionResult:
 		'⚠️ A BrowserError was raised without long_term_memory - always set long_term_memory when raising BrowserError to propagate right messages to LLM.'
 	)
 	raise e
+
+
+def handle_classified_error(
+	error: Exception,
+	action_name: str,
+	context: dict = None
+) -> ActionResult:
+	"""Handle errors using the enhanced error classification system."""
+	classification = error_classifier.classify_error(error, action_name, context or {})
+
+	# Log the classification for debugging
+	logger.debug(f"Error classified as {classification.category.value} for action {action_name}")
+
+	# Create ActionResult with classified error information
+	result = ActionResult(error=classification.user_message)
+
+	# Add metadata for potential retry logic
+	result.metadata = {
+		'error_category': classification.category.value,
+		'should_retry': classification.should_retry,
+		'retry_delay': classification.retry_delay,
+		'max_retries': classification.max_retries,
+		'technical_details': classification.technical_details
+	}
+
+	return result
 
 
 class Tools(Generic[Context]):
@@ -173,7 +200,7 @@ class Tools(Generic[Context]):
 				return ActionResult(extracted_content=memory, long_term_memory=memory)
 			except Exception as e:
 				logger.error(f'Failed to search Google: {e}')
-				return ActionResult(error=f'Failed to search Google for "{params.query}": {str(e)}')
+				return handle_classified_error(e, 'search_google', {'query': params.query})
 
 		@self.registry.action(
 			'Navigate to URL, set new_tab=True to open in new tab, False to navigate in current tab', param_model=GoToUrlAction
@@ -304,8 +331,8 @@ class Tools(Generic[Context]):
 
 				return handle_browser_error(e)
 			except Exception as e:
-				error_msg = f'Failed to click element {params.index}: {str(e)}'
-				return ActionResult(error=error_msg)
+				logger.error(f'Failed to click element {params.index}: {e}')
+				return handle_classified_error(e, 'click_element', {'element_index': params.index})
 
 		@self.registry.action(
 			'Input text into an input interactive element. Only input text into indices that are inside your current browser_state. Never input text into indices that are not inside your current browser_state.',
@@ -338,8 +365,7 @@ class Tools(Generic[Context]):
 			except Exception as e:
 				# Log the full error for debugging
 				logger.error(f'Failed to dispatch TypeTextEvent: {type(e).__name__}: {e}')
-				error_msg = f'Failed to input text into element {params.index}: {e}'
-				return ActionResult(error=error_msg)
+				return handle_classified_error(e, 'input_text', {'element_index': params.index, 'text': params.text})
 
 		@self.registry.action('Upload file to interactive element with file path', param_model=UploadFileAction)
 		async def upload_file_to_element(
