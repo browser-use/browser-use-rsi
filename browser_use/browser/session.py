@@ -344,6 +344,9 @@ class BrowserSession(BaseModel):
 	_permissions_watchdog: Any | None = PrivateAttr(default=None)
 	_recording_watchdog: Any | None = PrivateAttr(default=None)
 	_enhanced_navigation_watchdog: Any | None = PrivateAttr(default=None)
+	_network_reliability_watchdog: Any | None = PrivateAttr(default=None)
+	_form_reliability_watchdog: Any | None = PrivateAttr(default=None)
+	_dynamic_content_watchdog: Any | None = PrivateAttr(default=None)
 
 	_logger: Any = PrivateAttr(default=None)
 
@@ -984,6 +987,9 @@ class BrowserSession(BaseModel):
 		from browser_use.browser.watchdogs.security_watchdog import SecurityWatchdog
 		from browser_use.browser.watchdogs.storage_state_watchdog import StorageStateWatchdog
 		from browser_use.browser.watchdogs.enhanced_navigation_watchdog import EnhancedNavigationWatchdog
+		from browser_use.browser.watchdogs.network_reliability_watchdog import NetworkReliabilityWatchdog
+		from browser_use.browser.watchdogs.form_reliability_watchdog import FormReliabilityWatchdog
+		from browser_use.browser.watchdogs.dynamic_content_watchdog import DynamicContentWatchdog
 
 		# Initialize CrashWatchdog
 		# CrashWatchdog.model_rebuild()
@@ -1102,6 +1108,22 @@ class BrowserSession(BaseModel):
 		EnhancedNavigationWatchdog.model_rebuild()
 		self._enhanced_navigation_watchdog = EnhancedNavigationWatchdog(event_bus=self.event_bus, browser_session=self)
 		# Enhanced navigation watchdog listens to NavigationStartedEvent and NavigationCompleteEvent
+		self._enhanced_navigation_watchdog.attach_to_session()
+
+		# Initialize NetworkReliabilityWatchdog (handles network errors and retries)
+		NetworkReliabilityWatchdog.model_rebuild()
+		self._network_reliability_watchdog = NetworkReliabilityWatchdog(event_bus=self.event_bus, browser_session=self)
+		self._network_reliability_watchdog.attach_to_session()
+
+		# Initialize FormReliabilityWatchdog (handles form submission reliability)
+		FormReliabilityWatchdog.model_rebuild()
+		self._form_reliability_watchdog = FormReliabilityWatchdog(event_bus=self.event_bus, browser_session=self)
+		self._form_reliability_watchdog.attach_to_session()
+
+		# Initialize DynamicContentWatchdog (handles SPA and AJAX content)
+		DynamicContentWatchdog.model_rebuild()
+		self._dynamic_content_watchdog = DynamicContentWatchdog(event_bus=self.event_bus, browser_session=self)
+		self._dynamic_content_watchdog.attach_to_session()
 
 		# Mark watchdogs as attached to prevent duplicate attachment
 		self._watchdogs_attached = True
