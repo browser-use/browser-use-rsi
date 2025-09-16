@@ -715,6 +715,16 @@ class Agent(Generic[Context, AgentStructuredOutput]):
 				self._get_model_output_with_retry(input_messages), timeout=self.settings.llm_timeout
 			)
 		except TimeoutError:
+			# Track consecutive LLM timeouts for progressive timeout adjustment
+			consecutive_llm_timeouts = getattr(self.state, 'consecutive_llm_timeouts', 0) + 1
+			self.state.consecutive_llm_timeouts = consecutive_llm_timeouts
+
+			# Progressive LLM timeout adjustment
+			if consecutive_llm_timeouts >= 2:
+				original_llm_timeout = self.settings.llm_timeout
+				adjusted_llm_timeout = min(original_llm_timeout * 1.3, 180)  # Cap at 3 minutes
+				self.logger.debug(f'🔄 Adjusting LLM timeout from {original_llm_timeout}s to {adjusted_llm_timeout}s due to consecutive timeouts')
+				self.settings.llm_timeout = int(adjusted_llm_timeout)
 
 			@observe(name='_llm_call_timed_out_with_input')
 			async def _log_model_input_to_lmnr(input_messages: list[BaseMessage]) -> None:
@@ -763,6 +773,7 @@ class Agent(Generic[Context, AgentStructuredOutput]):
 			return
 
 		self.state.consecutive_failures = 0
+		self.state.consecutive_llm_timeouts = 0  # Reset LLM timeout counter on success
 		self.logger.debug(f'🔄 Step {self.state.n_steps}: Consecutive failures reset to: {self.state.consecutive_failures}')
 
 		# Log completion results
@@ -1491,11 +1502,19 @@ class Agent(Generic[Context, AgentStructuredOutput]):
 					)
 					self.logger.debug(f'✅ Completed step {step + 1}/{max_steps}')
 				except TimeoutError:
-					# Handle step timeout gracefully
+					# Handle step timeout gracefully with recovery logic
 					error_msg = f'Step {step + 1} timed out after {self.settings.step_timeout} seconds'
 					self.logger.error(f'⏰ {error_msg}')
 					self.state.consecutive_failures += 1
-					self.state.last_result = [ActionResult(error=error_msg)]
+
+					# Progressive timeout adjustment for next steps
+					if self.state.consecutive_failures >= 2:
+						original_timeout = self.settings.step_timeout
+						adjusted_timeout = min(original_timeout * 1.5, 300)  # Cap at 5 minutes
+						self.logger.debug(f'🔄 Adjusting step timeout from {original_timeout}s to {adjusted_timeout}s due to consecutive timeouts')
+						self.settings.step_timeout = int(adjusted_timeout)
+
+					self.state.last_result = [ActionResult(error=error_msg, include_in_memory=True)]
 
 				if on_step_end is not None:
 					await on_step_end(self)

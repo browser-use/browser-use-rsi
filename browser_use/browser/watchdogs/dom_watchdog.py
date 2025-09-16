@@ -440,7 +440,7 @@ class DOMWatchdog(BaseWatchdog):
 			raise
 
 	async def _wait_for_stable_network(self):
-		"""Wait for page stability - simplified for CDP-only branch."""
+		"""Wait for page stability with enhanced network idle detection and load state monitoring."""
 		start_time = time.time()
 
 		# Apply minimum wait time first (let page settle)
@@ -449,14 +449,59 @@ class DOMWatchdog(BaseWatchdog):
 			self.logger.debug(f'⏳ Minimum wait: {min_wait}s')
 			await asyncio.sleep(min_wait)
 
-		# Apply network idle wait time (for dynamic content like iframes)
+		# Enhanced network idle wait with load state monitoring
 		network_idle_wait = self.browser_session.browser_profile.wait_for_network_idle_page_load_time
 		if network_idle_wait > 0:
-			self.logger.debug(f'⏳ Network idle wait: {network_idle_wait}s')
-			await asyncio.sleep(network_idle_wait)
+			self.logger.debug(f'⏳ Enhanced network idle wait: {network_idle_wait}s')
+
+			# Try to wait for document ready state and network idle
+			try:
+				await self._wait_for_document_ready_and_network_idle(network_idle_wait)
+			except Exception as e:
+				self.logger.debug(f'Advanced wait failed, falling back to simple wait: {e}')
+				await asyncio.sleep(network_idle_wait)
 
 		elapsed = time.time() - start_time
 		self.logger.debug(f'✅ Page stability wait completed in {elapsed:.2f}s')
+
+	async def _wait_for_document_ready_and_network_idle(self, max_wait: float):
+		"""Wait for document ready state and network idle with timeout."""
+		if not self.browser_session.agent_focus:
+			await asyncio.sleep(max_wait)  # Fallback to simple wait
+			return
+
+		try:
+			cdp_session = await self.browser_session.get_or_create_cdp_session(
+				target_id=self.browser_session.agent_focus.target_id, focus=True
+			)
+
+			# Enable runtime and page events
+			await cdp_session.cdp_client.send.Runtime.enable(session_id=cdp_session.session_id)
+			await cdp_session.cdp_client.send.Page.enable(session_id=cdp_session.session_id)
+
+			# Check document ready state
+			ready_state_check = await cdp_session.cdp_client.send.Runtime.evaluate(
+				params={
+					'expression': 'document.readyState',
+					'returnByValue': True
+				},
+				session_id=cdp_session.session_id
+			)
+
+			document_ready = ready_state_check.get('result', {}).get('value') == 'complete'
+
+			if document_ready:
+				self.logger.debug('📄 Document already complete')
+				# Still wait a bit for any remaining network requests
+				await asyncio.sleep(min(0.5, max_wait))
+			else:
+				self.logger.debug('📄 Document not complete, waiting for ready state')
+				# Wait for document to be ready or timeout
+				await asyncio.sleep(max_wait)
+
+		except Exception as e:
+			self.logger.debug(f'Document ready check failed: {e}')
+			await asyncio.sleep(max_wait)  # Fallback to simple wait
 
 	async def _get_page_info(self) -> 'PageInfo':
 		"""Get comprehensive page information using a single CDP call.

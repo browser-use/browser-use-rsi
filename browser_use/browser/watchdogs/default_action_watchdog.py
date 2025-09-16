@@ -220,10 +220,37 @@ class DefaultActionWatchdog(BaseWatchdog):
 	async def _click_element_node_impl(self, element_node, while_holding_ctrl: bool = False) -> dict | None:
 		"""
 		Click an element using pure CDP with multiple fallback methods for getting element geometry.
+		Enhanced with staleness detection and retry logic for improved reliability.
 
 		Args:
 			element_node: The DOM element to click
-			new_tab: If True, open any resulting navigation in a new tab
+			while_holding_ctrl: If True, hold ctrl during click (for new tab behavior)
+		"""
+
+		max_retries = 3
+		retry_delay = 0.5
+
+		for attempt in range(max_retries):
+			try:
+				return await self._click_element_attempt(element_node, while_holding_ctrl)
+			except Exception as e:
+				if attempt == max_retries - 1:
+					# Last attempt failed, re-raise the error
+					raise
+
+				# Check if error suggests stale element or DOM changes
+				error_msg = str(e).lower()
+				if any(keyword in error_msg for keyword in ['stale', 'detached', 'not found', 'changed']):
+					self.logger.debug(f'Element appears stale (attempt {attempt + 1}/{max_retries}), retrying after delay: {e}')
+					await asyncio.sleep(retry_delay * (attempt + 1))  # Progressive backoff
+					continue
+				else:
+					# Non-stale error, re-raise immediately
+					raise
+
+	async def _click_element_attempt(self, element_node, while_holding_ctrl: bool = False) -> dict | None:
+		"""
+		Single attempt at clicking an element with enhanced error handling.
 		"""
 
 		try:

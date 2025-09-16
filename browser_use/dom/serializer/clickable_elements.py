@@ -196,4 +196,18 @@ class ClickableElementDetector:
 		if node.snapshot_node and node.snapshot_node.cursor_style and node.snapshot_node.cursor_style == 'pointer':
 			return True
 
+		# Enhanced visibility check: Elements with very small bounds might still be interactive
+		# if they have good contrast or are positioned strategically (e.g., close buttons)
+		if (
+			node.snapshot_node
+			and node.snapshot_node.bounds
+			and node.snapshot_node.bounds.width > 0
+			and node.snapshot_node.bounds.height > 0
+			and node.attributes
+		):
+			# Check for common interactive element attributes even on small elements
+			interactive_hints = {'data-testid', 'aria-label', 'title', 'alt'}
+			if any(attr in node.attributes for attr in interactive_hints):
+				return True
+
 		return False
