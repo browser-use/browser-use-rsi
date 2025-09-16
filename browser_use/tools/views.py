@@ -91,3 +91,9 @@ class GetDropdownOptionsAction(BaseModel):
 class SelectDropdownOptionAction(BaseModel):
 	index: int = Field(ge=1, description='index of the dropdown element to select an option for')
 	text: str = Field(description='the text or exact value of the option to select')
+
+
+class WaitForDynamicContentAction(BaseModel):
+	timeout_seconds: int = Field(default=5, ge=1, le=10, description='seconds to wait for dynamic content to load')
+	scroll_trigger: bool = Field(default=True, description='whether to scroll slightly to trigger content loading')
+	element_pattern: str | None = Field(default=None, description='optional text pattern to wait for in elements')

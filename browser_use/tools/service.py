@@ -48,6 +48,7 @@ from browser_use.tools.views import (
 	StructuredOutputAction,
 	SwitchTabAction,
 	UploadFileAction,
+	WaitForDynamicContentAction,
 )
 from browser_use.utils import _log_pretty_url, time_execution_sync
 
@@ -760,6 +761,82 @@ You will be given a query and the markdown of a webpage that has been filtered t
 					extracted_content=msg,
 					long_term_memory=f"Tried scrolling to text '{text}' but it was not found",
 				)
+
+		@self.registry.action(
+			'Wait for dynamic content to load on the current page. Use when content appears empty or is loading. Optionally scroll slightly to trigger loading.',
+			param_model=WaitForDynamicContentAction,
+		)
+		async def wait_for_dynamic_content(params: WaitForDynamicContentAction, browser_session: BrowserSession):
+			import asyncio
+
+			# Get initial page state
+			try:
+				initial_state = await browser_session.get_browser_state_summary(include_screenshot=False)
+				initial_elements = len(initial_state.clickable_elements)
+
+				# Optionally trigger loading with a small scroll
+				if params.scroll_trigger:
+					try:
+						# Small scroll down and then back up to trigger loading
+						scroll_event = browser_session.event_bus.dispatch(
+							ScrollEvent(pages=0.1, down=True, node=None)
+						)
+						await scroll_event
+						await scroll_event.event_result(raise_if_any=False, raise_if_none=False)
+
+						# Wait a moment
+						await asyncio.sleep(1)
+
+						# Scroll back up
+						scroll_event = browser_session.event_bus.dispatch(
+							ScrollEvent(pages=0.1, down=False, node=None)
+						)
+						await scroll_event
+						await scroll_event.event_result(raise_if_any=False, raise_if_none=False)
+					except Exception:
+						pass  # Ignore scroll errors, just continue with waiting
+
+				# Wait for the specified time, checking periodically for new content
+				wait_time = params.timeout_seconds
+				check_interval = min(1, wait_time / 3)  # Check 3 times during wait period
+
+				for i in range(int(wait_time / check_interval)):
+					await asyncio.sleep(check_interval)
+
+					# Check if new elements appeared
+					current_state = await browser_session.get_browser_state_summary(include_screenshot=False)
+					current_elements = len(current_state.clickable_elements)
+
+					# If looking for specific pattern, check for it
+					if params.element_pattern:
+						page_text = ' '.join([elem.text for elem in current_state.clickable_elements if elem.text])
+						if params.element_pattern.lower() in page_text.lower():
+							memory = f'Found pattern "{params.element_pattern}" after {i * check_interval:.1f}s'
+							logger.info(f'⏳ {memory}')
+							return ActionResult(extracted_content=memory, long_term_memory=memory)
+
+					# Check if significant new content appeared
+					if current_elements > initial_elements + 3:  # More than 3 new elements
+						memory = f'New content loaded: {current_elements - initial_elements} new elements after {i * check_interval:.1f}s'
+						logger.info(f'⏳ {memory}')
+						return ActionResult(extracted_content=memory, long_term_memory=memory)
+
+				# Final wait period completed
+				final_state = await browser_session.get_browser_state_summary(include_screenshot=False)
+				final_elements = len(final_state.clickable_elements)
+
+				if final_elements > initial_elements:
+					memory = f'Waited {wait_time}s for dynamic content - {final_elements - initial_elements} new elements appeared'
+				else:
+					memory = f'Waited {wait_time}s for dynamic content - no significant changes detected'
+
+				logger.info(f'⏳ {memory}')
+				return ActionResult(extracted_content=memory, long_term_memory=memory)
+
+			except Exception as e:
+				error_msg = f'Failed to wait for dynamic content: {str(e)}'
+				logger.error(error_msg)
+				return ActionResult(error=error_msg)
 
 		# Dropdown Actions
 

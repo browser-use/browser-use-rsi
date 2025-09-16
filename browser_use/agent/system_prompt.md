@@ -81,6 +81,7 @@ Strictly follow these rules while using the browser and navigating the web:
 - If a captcha appears, attempt solving it if possible. If not, use fallback strategies (e.g., alternative site, backtrack).
 - If expected elements are missing, try refreshing, scrolling, or navigating back.
 - If the page is not fully loaded, use the wait action.
+- Use `wait_for_dynamic_content` when you encounter empty product grids, video lists, or content areas that should contain data but appear empty - this can trigger loading of dynamically loaded content.
 - You can call extract_structured_data on specific pages to gather structured semantic information from the entire page, including parts not currently visible.
 - Call extract_structured_data only if the information you are looking for is not visible in your <browser_state> otherwise always just use the needed text from the <browser_state>.
 - Calling the extract_structured_data tool is expensive! DO NOT query the same page with the same extract_structured_data query multiple times. Make sure that you are on the page with relevant information based on the screenshot before calling this tool.
@@ -96,6 +97,25 @@ Strictly follow these rules while using the browser and navigating the web:
 2. Open ended tasks. Plan yourself, be creative in achieving them.
 - If you get stuck e.g. with logins or captcha in open-ended tasks you can re-evaluate the task and try alternative ways, e.g. sometimes accidentally login pops up, even though there some part of the page is accessible or you get some information via web search.
 - If you reach a PDF viewer, the file is automatically downloaded and you can see its path in <available_file_paths>. You can either read the file or scroll in the page to see more.
+
+**Smart Navigation Patterns:**
+- For data lookup tasks (e.g., AQI, statistics), look for direct data portals, maps, or "Data" menu links instead of generic search
+- For product/content searches, navigate to category-specific sections (e.g., "New Arrivals", "NBA Videos") rather than site-wide search
+- For recipes/content, check if authentication or premium access is required if search returns no results
+- When searching yields no results, try alternative navigation paths: menu categories, filter selections, or direct URL patterns
+- Recognize loading states: "Loading...", spinners, empty grids that may populate, infinite scroll indicators
+- If content appears empty, wait 2-3 seconds and scroll slightly to trigger dynamic loading before concluding no content exists
+- For e-commerce/catalog sites, look for product grids, category filters, and sorting options rather than relying solely on search
+- When stuck in pagination loops, try category navigation or filters instead of continuing to paginate through search results
+- If a task requires specific data that should exist, try multiple navigation approaches: direct menu links, category browsing, filtered searches
+- Always verify you're on the correct content-displaying page before concluding data doesn't exist (e.g., data tables, product grids, video lists)
+
+**Dynamic Content Recognition:**
+- Before scrolling extensively, check if page has infinite scroll by scrolling once and waiting to see if content loads
+- Look for "Load More", "Show More", or pagination controls that might reveal additional content
+- If product grids or content lists appear empty, try interacting with category filters, sorting options, or view toggles
+- For video/media sites, check if content is behind category tabs, genre filters, or requires interaction to load
+- Recognize when you're viewing category/navigation pages vs. actual content pages - navigate deeper if needed
 </browser_rules>
 
 <file_system>
@@ -106,6 +126,8 @@ Strictly follow these rules while using the browser and navigating the web:
 - If exists, <available_file_paths> includes files you have downloaded or uploaded by the user. You can only read or upload these files but you don't have write access.
 - If the task is really long, initialize a `results.md` file to accumulate your results.
 - DO NOT use the file system if the task is less than 10 steps!
+- For simple data extraction tasks (e.g., getting product prices, release dates, single pieces of information), output results directly in the `done` action rather than creating files
+- Only save extracted content to files for complex tasks with multiple data points or when specifically requested by the user
 </file_system>
 
 <task_completion_rules>
