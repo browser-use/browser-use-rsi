@@ -133,6 +133,43 @@ class EnhancedErrorClassifier:
 			(r'incompatible.*version', "Incompatible version")
 		]
 
+		# JavaScript execution error patterns (retryable with DOM refresh)
+		self.javascript_patterns = [
+			(r'javascript.*error', "JavaScript execution error"),
+			(r'script.*error', "Script execution failed"),
+			(r'uncaught.*exception', "Uncaught JavaScript exception"),
+			(r'reference.*error', "JavaScript reference error"),
+			(r'type.*error.*javascript', "JavaScript type error"),
+			(r'cannot.*read.*propert', "JavaScript property access error"),
+			(r'function.*not.*defined', "JavaScript function not defined")
+		]
+
+		# Anti-bot and security challenge patterns
+		self.antibot_patterns = [
+			(r'cloudflare.*challenge', "Cloudflare security challenge"),
+			(r'captcha.*required', "CAPTCHA challenge detected"),
+			(r'recaptcha.*challenge', "reCAPTCHA challenge detected"),
+			(r'bot.*detect', "Bot detection triggered"),
+			(r'rate.*limit.*exceed', "Rate limiting activated"),
+			(r'suspicious.*activity', "Suspicious activity detected"),
+			(r'please.*verify.*human', "Human verification required"),
+			(r'security.*check.*required', "Security verification required"),
+			(r'access.*denied.*bot', "Bot access denied"),
+			(r'automated.*traffic.*detect', "Automated traffic detected")
+		]
+
+		# Dynamic content loading patterns
+		self.dynamic_content_patterns = [
+			(r'content.*still.*loading', "Dynamic content still loading"),
+			(r'ajax.*request.*pending', "AJAX request in progress"),
+			(r'react.*component.*mounting', "React component mounting"),
+			(r'spa.*router.*navigating', "SPA navigation in progress"),
+			(r'virtual.*dom.*updating', "Virtual DOM update in progress"),
+			(r'lazy.*load.*pending', "Lazy loading in progress"),
+			(r'infinite.*scroll.*loading', "Infinite scroll loading"),
+			(r'skeleton.*loader.*active', "Skeleton loader active")
+		]
+
 	def classify_error(
 		self,
 		error: Exception,
@@ -196,6 +233,30 @@ class EnhancedErrorClassifier:
 					technical_details=error_str
 				)
 
+		# JavaScript execution errors - retry with DOM refresh
+		for pattern, description in self.javascript_patterns:
+			if re.search(pattern, error_str, re.IGNORECASE):
+				return ErrorClassificationResult(
+					category=ErrorCategory.RETRYABLE_TIMING,
+					should_retry=True,
+					retry_delay=1.0,
+					max_retries=2,
+					user_message=f"JavaScript error: {description}. Waiting for page to stabilize and retrying...",
+					technical_details=error_str
+				)
+
+		# Dynamic content loading - retry with longer wait
+		for pattern, description in self.dynamic_content_patterns:
+			if re.search(pattern, error_str, re.IGNORECASE):
+				return ErrorClassificationResult(
+					category=ErrorCategory.RETRYABLE_TIMING,
+					should_retry=True,
+					retry_delay=3.0,
+					max_retries=2,
+					user_message=f"Dynamic content loading: {description}. Waiting for content to load...",
+					technical_details=error_str
+				)
+
 		# Check for permanent error patterns
 
 		# Invalid input - don't retry
@@ -235,6 +296,16 @@ class EnhancedErrorClassifier:
 					category=ErrorCategory.PERMANENT_CONFIGURATION,
 					should_retry=False,
 					user_message=f"Configuration error: {description}. Check system setup.",
+					technical_details=error_str
+				)
+
+		# Anti-bot detection - don't retry (needs human intervention)
+		for pattern, description in self.antibot_patterns:
+			if re.search(pattern, error_str, re.IGNORECASE):
+				return ErrorClassificationResult(
+					category=ErrorCategory.PERMANENT_ACCESS_DENIED,
+					should_retry=False,
+					user_message=f"Anti-bot protection: {description}. Manual intervention required.",
 					technical_details=error_str
 				)
 

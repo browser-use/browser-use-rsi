@@ -189,6 +189,7 @@ class EnhancedNavigationWatchdog(BaseWatchdog):
 						let challengeFound = false;
 						let challengeType = '';
 
+						// Check by selectors
 						for (const selector of allSelectors) {
 							const element = document.querySelector(selector);
 							if (element) {
@@ -201,26 +202,30 @@ class EnhancedNavigationWatchdog(BaseWatchdog):
 							}
 						}
 
-						// Check for challenge text content
-						const pageText = document.body.textContent.toLowerCase();
-						const challengeTexts = [
-							'cloudflare',
-							'checking your browser',
-							'human verification',
-							'please wait while we verify',
-							'security check',
-							'press & hold',
-							'click to verify',
-							'i am human'
-						];
+						// Additional text-based detection
+						if (!challengeFound) {
+							const bodyText = document.body.innerText.toLowerCase();
+							const challengeTexts = [
+								'checking your browser',
+								'verify you are human',
+								'complete the security check',
+								'please wait while we verify',
+								'cloudflare security challenge',
+								'ddos protection by cloudflare',
+								'ray id:',
+								'just a moment',
+								'please solve the captcha',
+								'prove you are not a robot'
+							];
 
-						let textChallenge = '';
-						for (const text of challengeTexts) {
-							if (pageText.includes(text)) {
-								challengeFound = true;
-								textChallenge = text;
-								break;
+							for (const text of challengeTexts) {
+								if (bodyText.includes(text)) {
+									challengeFound = true;
+									challengeType = 'text:' + text;
+									break;
+								}
 							}
+						}
 						}
 
 						return {
