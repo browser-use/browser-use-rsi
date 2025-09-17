@@ -46,7 +46,8 @@ class DynamicContentWatchdog(BaseWatchdog):
 
 	async def on_BrowserStateRequestEvent(self, event: BrowserStateRequestEvent) -> None:
 		"""Ensure dynamic content is loaded before state capture."""
-		if event.target_id:
+		# Check if event has target_id attribute before accessing it
+		if hasattr(event, 'target_id') and event.target_id:
 			await self._ensure_dynamic_content_loaded(event.target_id)
 
 	async def _start_dynamic_content_monitoring(self, target_id: str, url: str) -> None:
